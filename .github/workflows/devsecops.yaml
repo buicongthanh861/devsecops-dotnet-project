@@ -9,26 +9,22 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    name: Build and Run Unit Tests + SAST Scan
+    name: Build, Test & SAST
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
 
-      - name: Setup .NET 8 SDK
-        uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: '8.0.x'
 
-      - name: Restore dependencies
-        run: dotnet restore
-
-      - name: Build the application
-        run: dotnet build --configuration Release --no-restore
+      - run: dotnet restore
+      - run: dotnet build --configuration Release --no-restore
 
       - name: Run Unit Tests
         run: dotnet test --no-build --verbosity normal
 
       - name: Run SonarCloud SAST Scan
+        if: success()
         uses: sonarsource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -45,11 +41,8 @@ jobs:
     needs: build
     name: Run SCA (Dependency) Scan with Snyk
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Run Snyk to check for vulnerabilities
-        uses: snyk/actions/dotnet@master
+      - uses: actions/checkout@v4
+      - uses: snyk/actions/dotnet@master
         continue-on-error: true
         env:
           SNYK_TOKEN: ${{ secrets.SNYK_TOKEN }}
@@ -61,14 +54,10 @@ jobs:
     permissions:
       contents: read
       issues: write
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
+      - uses: actions/checkout@v4
       - name: Run OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.14.0
         with:
-          target: "http://localhost:5000" 
-          rules_file_name: ".zap/rules.tsv"
+          target: "https://example.com"
           cmd_options: "-a"
