@@ -1,17 +1,34 @@
-name: Build code, run unit test, run SAST, SCA, DAST security scans for dotnet App.
-on: push
+name: Build, Test, and Security Scans for .NET 8 App
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    name: Run unit tests and SAST scan on the source code
+    name: Build and Run Unit Tests + SAST Scan
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-dotnet@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 8 SDK
+        uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: '8.0.403'
-      - run: dotnet build --no-restore --configuration Release
-      - name: SonarCloud Scan
+          dotnet-version: '8.0.x'
+
+      - name: Restore dependencies
+        run: dotnet restore
+
+      - name: Build the application
+        run: dotnet build --configuration Release --no-restore
+
+      - name: Run Unit Tests
+        run: dotnet test --no-build --verbosity normal
+
+      - name: Run SonarCloud SAST Scan
         uses: sonarsource/sonarcloud-github-action@master
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -20,14 +37,18 @@ jobs:
           args: >
             -Dsonar.organization=java-woof
             -Dsonar.projectKey=buicongthanh861_devsecops-dotnet-project
+            -Dsonar.sources=.
+            -Dsonar.host.url=https://sonarcloud.io
 
   security:
     runs-on: ubuntu-latest
     needs: build
-    name: Run the SCA scan on the source code
+    name: Run SCA (Dependency) Scan with Snyk
     steps:
-      - uses: actions/checkout@master
-      - name: RunSnyk to check for vulnerabilities
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Run Snyk to check for vulnerabilities
         uses: snyk/actions/dotnet@master
         continue-on-error: true
         env:
@@ -36,20 +57,18 @@ jobs:
   zap_scan:
     runs-on: ubuntu-latest
     needs: security
-    name: Run DAST scan on the web application
+    name: Run DAST scan using OWASP ZAP
     permissions:
       contents: read
       issues: write
 
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          ref: master
 
-      - name: ZAP Scan
+      - name: Run OWASP ZAP Baseline Scan
         uses: zaproxy/action-baseline@v0.14.0
         with:
-          target: "http://example.com/"
+          target: "http://localhost:5000" 
           rules_file_name: ".zap/rules.tsv"
           cmd_options: "-a"
